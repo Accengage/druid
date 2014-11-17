@@ -173,8 +173,8 @@ public class IndexGeneratorJob implements Jobby
 	        job.setInputFormatClass(CombineTextInputFormat.class);
 	      } else {
 	        job.setInputFormatClass(TextInputFormat.class);
-	        job.setMapperClass(IndexGeneratorMapper.class);
 	      }
+    	  job.setMapperClass(IndexGeneratorMapper.class);
       }
       
       job.setMapOutputValueClass(Text.class);

@@ -138,11 +138,11 @@ public class DeterminePartitionsJob implements Jobby
         if(config.isAvro()){
         	//Avro specific config
         	groupByJob.setMapperClass(AvroDeterminePartitionsGroupByMapper.class);
-        	groupByJob.setInputFormatClass(TextInputFormat.class);
+        	groupByJob.setInputFormatClass(AvroPositionInputFormat.class);
         }
         else{
         	groupByJob.setMapperClass(DeterminePartitionsGroupByMapper.class);
-        	groupByJob.setInputFormatClass(AvroPositionInputFormat.class);
+        	groupByJob.setInputFormatClass(TextInputFormat.class);
         }
         
         groupByJob.setMapOutputKeyClass(BytesWritable.class);
