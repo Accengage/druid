@@ -19,6 +19,7 @@
 
 package io.druid.indexer;
 
+import com.accengage.mapreduce.avro.AvroPositionInputFormat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.google.common.base.Throwables;
@@ -33,6 +34,7 @@ import com.metamx.common.IAE;
 import com.metamx.common.ISE;
 import com.metamx.common.guava.CloseQuietly;
 import com.metamx.common.logger.Logger;
+
 import io.druid.data.input.InputRow;
 import io.druid.data.input.impl.StringInputRowParser;
 import io.druid.offheap.OffheapBufferPool;
@@ -47,6 +49,9 @@ import io.druid.segment.incremental.IncrementalIndex;
 import io.druid.segment.incremental.IncrementalIndexSchema;
 import io.druid.segment.incremental.OffheapIncrementalIndex;
 import io.druid.timeline.DataSegment;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.mapred.AvroValue;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -58,11 +63,13 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3native.NativeS3FileSystem;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.InvalidJobConfException;
 import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.CombineTextInputFormat;
@@ -155,14 +162,21 @@ public class IndexGeneratorJob implements Jobby
       job.getConfiguration().set("io.sort.record.percent", "0.23");
 
       JobHelper.injectSystemProperties(job);
-
-      if (config.isCombineText()) {
-        job.setInputFormatClass(CombineTextInputFormat.class);
-      } else {
-        job.setInputFormatClass(TextInputFormat.class);
+      
+      if(config.isAvro()){
+    	  //Avro Specific configuration
+    	  job.setInputFormatClass(AvroPositionInputFormat.class);
+    	  job.setMapperClass(AvroIndexGeneratorMapper.class);
       }
-
-      job.setMapperClass(IndexGeneratorMapper.class);
+      else{
+    	  if (config.isCombineText()) {
+	        job.setInputFormatClass(CombineTextInputFormat.class);
+	      } else {
+	        job.setInputFormatClass(TextInputFormat.class);
+	        job.setMapperClass(IndexGeneratorMapper.class);
+	      }
+      }
+      
       job.setMapOutputValueClass(Text.class);
 
       SortableBytes.useSortableBytesAsMapOutputKey(job);
@@ -198,6 +212,32 @@ public class IndexGeneratorJob implements Jobby
     }
   }
 
+  public static class AvroIndexGeneratorMapper extends AvroHadoopDruidIndexerMapper<BytesWritable, Text>
+  {
+    @Override
+    protected void innerMap(
+        InputRow inputRow,
+        AvroValue<GenericRecord> record,
+        Context context
+    ) throws IOException, InterruptedException
+    {
+      // Group by bucket, sort by timestamp
+      final Optional<Bucket> bucket = getConfig().getBucket(inputRow);
+
+      if (!bucket.isPresent()) {
+        throw new ISE("WTF?! No bucket found for row: %s", inputRow);
+      }
+
+      context.write(
+          new SortableBytes(
+              bucket.get().toGroupKey(),
+              Longs.toByteArray(inputRow.getTimestampFromEpoch())
+          ).toBytesWritable(),
+          new Text(record.toString()) //TODO:Check implications
+      );
+    }
+  }
+  
   public static class IndexGeneratorMapper extends HadoopDruidIndexerMapper<BytesWritable, Text>
   {
     @Override
