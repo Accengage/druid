@@ -168,6 +168,12 @@ public class HadoopTuningConfig implements TuningConfig
   {
     return combineText;
   }
+  
+  @JsonProperty
+  public boolean isAvro()
+  {
+    return avro;
+  }
 
   public HadoopTuningConfig withWorkingPath(String path)
   {
