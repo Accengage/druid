@@ -291,6 +291,10 @@ public class HadoopDruidIndexerConfig
   {
     return schema.getTuningConfig().isCombineText();
   }
+  
+  public boolean isAvro() {
+		return schema.getTuningConfig().isAvro();
+	}
 
   public StringInputRowParser getParser()
   {
