@@ -19,6 +19,7 @@
 
 package io.druid.indexer;
 
+import com.accengage.mapreduce.avro.AvroPositionInputFormat;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.base.Optional;
 import com.google.common.base.Throwables;
@@ -30,6 +31,7 @@ import com.google.common.hash.Hashing;
 import com.google.common.io.Closeables;
 import com.metamx.common.ISE;
 import com.metamx.common.logger.Logger;
+
 import io.druid.data.input.InputRow;
 import io.druid.data.input.Rows;
 import io.druid.granularity.QueryGranularity;
@@ -37,6 +39,9 @@ import io.druid.query.aggregation.hyperloglog.HyperLogLogCollector;
 import io.druid.segment.indexing.granularity.UniformGranularitySpec;
 import io.druid.timeline.partition.HashBasedNumberedShardSpec;
 import io.druid.timeline.partition.NoneShardSpec;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.mapred.AvroValue;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -46,6 +51,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.CombineTextInputFormat;
@@ -90,14 +96,22 @@ public class DetermineHashedPartitionsJob implements Jobby
           new Configuration(),
           String.format("%s-determine_partitions_hashed-%s", config.getDataSource(), config.getIntervals())
       );
-
+      
       JobHelper.injectSystemProperties(groupByJob);
-      if (config.isCombineText()) {
-        groupByJob.setInputFormatClass(CombineTextInputFormat.class);
-      } else {
-        groupByJob.setInputFormatClass(TextInputFormat.class);
+      if(config.isAvro()){
+    	  //Specific to Avro Jobs
+    	  groupByJob.setInputFormatClass(AvroPositionInputFormat.class);
+    	  groupByJob.setMapperClass(AvroDetermineCardinalityMapper.class);
       }
-      groupByJob.setMapperClass(DetermineCardinalityMapper.class);
+      else{
+    	  if (config.isCombineText()) {
+    	        groupByJob.setInputFormatClass(CombineTextInputFormat.class);
+    	      } else {
+    	        groupByJob.setInputFormatClass(TextInputFormat.class);
+    	      }
+    	  groupByJob.setMapperClass(DetermineCardinalityMapper.class);
+      }
+      
       groupByJob.setMapOutputKeyClass(LongWritable.class);
       groupByJob.setMapOutputValueClass(BytesWritable.class);
       groupByJob.setReducerClass(DetermineCardinalityReducer.class);
@@ -210,6 +224,92 @@ public class DetermineHashedPartitionsJob implements Jobby
     catch (Exception e) {
       throw Throwables.propagate(e);
     }
+  }
+  
+  public static class AvroDetermineCardinalityMapper extends AvroHadoopDruidIndexerMapper<LongWritable, BytesWritable>
+  {
+    private static HashFunction hashFunction = Hashing.murmur3_128();
+    private QueryGranularity rollupGranularity = null;
+    private Map<Interval, HyperLogLogCollector> hyperLogLogs;
+    private HadoopDruidIndexerConfig config;
+    private boolean determineIntervals;
+
+    @Override
+    protected void setup(Context context)
+        throws IOException, InterruptedException
+    {
+      super.setup(context);
+      rollupGranularity = getConfig().getGranularitySpec().getQueryGranularity();
+      config = HadoopDruidIndexerConfig.fromConfiguration(context.getConfiguration());
+      Optional<Set<Interval>> intervals = config.getSegmentGranularIntervals();
+      if (intervals.isPresent()) {
+        determineIntervals = false;
+        final ImmutableMap.Builder<Interval, HyperLogLogCollector> builder = ImmutableMap.builder();
+        for (final Interval bucketInterval : intervals.get()) {
+          builder.put(bucketInterval, HyperLogLogCollector.makeLatestCollector());
+        }
+        hyperLogLogs = builder.build();
+      } else {
+        determineIntervals = true;
+        hyperLogLogs = Maps.newHashMap();
+      }
+    }
+
+    @Override
+    protected void innerMap(
+        InputRow inputRow,
+        AvroValue<GenericRecord> record,
+        Context context
+    ) throws IOException, InterruptedException
+    {
+
+      final List<Object> groupKey = Rows.toGroupKey(
+          rollupGranularity.truncate(inputRow.getTimestampFromEpoch()),
+          inputRow
+      );
+      Interval interval;
+      if (determineIntervals) {
+        interval = config.getGranularitySpec()
+                         .getSegmentGranularity()
+                         .bucket(new DateTime(inputRow.getTimestampFromEpoch()));
+
+        if (!hyperLogLogs.containsKey(interval)) {
+          hyperLogLogs.put(interval, HyperLogLogCollector.makeLatestCollector());
+        }
+      } else {
+        final Optional<Interval> maybeInterval = config.getGranularitySpec()
+                                                       .bucketInterval(new DateTime(inputRow.getTimestampFromEpoch()));
+
+        if (!maybeInterval.isPresent()) {
+          throw new ISE("WTF?! No bucket found for timestamp: %s", inputRow.getTimestampFromEpoch());
+        }
+        interval = maybeInterval.get();
+      }
+      hyperLogLogs.get(interval)
+                  .add(
+                      hashFunction.hashBytes(HadoopDruidIndexerConfig.jsonMapper.writeValueAsBytes(groupKey))
+                                  .asBytes()
+                  );
+    }
+
+    @Override
+    public void run(Context context) throws IOException, InterruptedException
+    {
+      setup(context);
+
+      while (context.nextKeyValue()) {
+        map(context.getCurrentKey(), context.getCurrentValue(), context);
+      }
+
+      for (Map.Entry<Interval, HyperLogLogCollector> entry : hyperLogLogs.entrySet()) {
+        context.write(
+            new LongWritable(entry.getKey().getStartMillis()),
+            new BytesWritable(entry.getValue().toByteArray())
+        );
+      }
+      cleanup(context);
+    }
+
   }
 
   public static class DetermineCardinalityMapper extends HadoopDruidIndexerMapper<LongWritable, BytesWritable>

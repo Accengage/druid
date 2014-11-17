@@ -31,10 +31,11 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.joda.time.DateTime;
+import org.mortbay.log.Log;
 
 import java.io.IOException;
 
-public abstract class HadoopDruidAvroIndexerMapper<KEYOUT, VALUEOUT> extends Mapper<LongWritable, AvroValue<GenericRecord>, KEYOUT, VALUEOUT>
+public abstract class AvroHadoopDruidIndexerMapper<KEYOUT, VALUEOUT> extends Mapper<LongWritable, AvroValue<GenericRecord>, KEYOUT, VALUEOUT>
 {
   private HadoopDruidIndexerConfig config;
   private StringInputRowParser parser;
@@ -65,7 +66,9 @@ public abstract class HadoopDruidAvroIndexerMapper<KEYOUT, VALUEOUT> extends Map
     try {
       final InputRow inputRow;
       try {
-        inputRow = parser.parse(value.toString());
+    	GenericRecord grValue = value.datum();
+    	Log.info("Generic Record " + grValue.toString());
+        inputRow = parser.parse(grValue.toString());
       }
       catch (Exception e) {
         if (config.isIgnoreInvalidRows()) {
