@@ -55,6 +55,7 @@ public class HadoopTuningConfig implements TuningConfig
         null,
         false,
         false,
+        false,
         false
     );
   }
@@ -70,6 +71,7 @@ public class HadoopTuningConfig implements TuningConfig
   private final boolean ignoreInvalidRows;
   private final Map<String, String> jobProperties;
   private final boolean combineText;
+  private final boolean avro;
   private final boolean persistInHeap;
   private final boolean ingestOffheap;
 
@@ -86,6 +88,7 @@ public class HadoopTuningConfig implements TuningConfig
       final @JsonProperty("ignoreInvalidRows") boolean ignoreInvalidRows,
       final @JsonProperty("jobProperties") Map<String, String> jobProperties,
       final @JsonProperty("combineText") boolean combineText,
+      final @JsonProperty("avro") boolean avro,
       final @JsonProperty("persistInHeap") boolean persistInHeap,
       final @JsonProperty("ingestOffheap") boolean ingestOffheap
   )
@@ -103,6 +106,7 @@ public class HadoopTuningConfig implements TuningConfig
                           ? ImmutableMap.<String, String>of()
                           : ImmutableMap.copyOf(jobProperties));
     this.combineText = combineText;
+    this.avro = avro;
     this.persistInHeap = persistInHeap;
     this.ingestOffheap = ingestOffheap;
   }
@@ -172,6 +176,12 @@ public class HadoopTuningConfig implements TuningConfig
   {
     return combineText;
   }
+  
+  @JsonProperty
+  public boolean isAvro()
+  {
+    return avro;
+  }
 
   @JsonProperty
   public boolean isPersistInHeap()
@@ -198,6 +208,7 @@ public class HadoopTuningConfig implements TuningConfig
         ignoreInvalidRows,
         jobProperties,
         combineText,
+        avro,
         persistInHeap,
         ingestOffheap
     );
@@ -217,6 +228,7 @@ public class HadoopTuningConfig implements TuningConfig
         ignoreInvalidRows,
         jobProperties,
         combineText,
+        avro,
         persistInHeap,
         ingestOffheap
     );
@@ -236,6 +248,7 @@ public class HadoopTuningConfig implements TuningConfig
         ignoreInvalidRows,
         jobProperties,
         combineText,
+        avro,
         persistInHeap,
         ingestOffheap
     );
