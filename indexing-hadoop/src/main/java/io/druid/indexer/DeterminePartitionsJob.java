@@ -19,6 +19,7 @@
 
 package io.druid.indexer;
 
+import com.accengage.mapreduce.avro.AvroPositionInputFormat;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -36,6 +37,7 @@ import com.google.common.io.Closeables;
 import com.metamx.common.ISE;
 import com.metamx.common.guava.nary.BinaryFn;
 import com.metamx.common.logger.Logger;
+
 import io.druid.collections.CombiningIterable;
 import io.druid.data.input.InputRow;
 import io.druid.data.input.Rows;
@@ -44,11 +46,15 @@ import io.druid.indexer.partitions.SingleDimensionPartitionsSpec;
 import io.druid.timeline.partition.NoneShardSpec;
 import io.druid.timeline.partition.ShardSpec;
 import io.druid.timeline.partition.SingleDimensionShardSpec;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.mapred.AvroValue;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -129,8 +135,13 @@ public class DeterminePartitionsJob implements Jobby
         );
 
         JobHelper.injectSystemProperties(groupByJob);
-        groupByJob.setInputFormatClass(TextInputFormat.class);
-        groupByJob.setMapperClass(DeterminePartitionsGroupByMapper.class);
+        if(config.isAvro()){
+        	groupByJob.setInputFormatClass(AvroPositionInputFormat.class);
+            groupByJob.setMapperClass(AvroDeterminePartitionsGroupByMapper.class);
+        }else{
+        	groupByJob.setInputFormatClass(TextInputFormat.class);
+            groupByJob.setMapperClass(DeterminePartitionsGroupByMapper.class);
+        }
         groupByJob.setMapOutputKeyClass(BytesWritable.class);
         groupByJob.setMapOutputValueClass(NullWritable.class);
         groupByJob.setCombinerClass(DeterminePartitionsGroupByReducer.class);
@@ -263,6 +274,36 @@ public class DeterminePartitionsJob implements Jobby
     protected void innerMap(
         InputRow inputRow,
         Text text,
+        Context context
+    ) throws IOException, InterruptedException
+    {
+      final List<Object> groupKey = Rows.toGroupKey(
+          rollupGranularity.truncate(inputRow.getTimestampFromEpoch()),
+          inputRow
+      );
+      context.write(
+          new BytesWritable(HadoopDruidIndexerConfig.jsonMapper.writeValueAsBytes(groupKey)),
+          NullWritable.get()
+      );
+    }
+  }
+  
+  public static class AvroDeterminePartitionsGroupByMapper extends AvroHadoopDruidIndexerMapper<BytesWritable, NullWritable>
+  {
+    private QueryGranularity rollupGranularity = null;
+
+    @Override
+    protected void setup(Context context)
+        throws IOException, InterruptedException
+    {
+      super.setup(context);
+      rollupGranularity = getConfig().getGranularitySpec().getQueryGranularity();
+    }
+
+    @Override
+    protected void innerMap(
+        InputRow inputRow,
+        AvroValue<GenericRecord> record,
         Context context
     ) throws IOException, InterruptedException
     {
