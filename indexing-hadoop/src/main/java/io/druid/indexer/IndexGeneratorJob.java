@@ -46,8 +46,10 @@ import io.druid.segment.incremental.IncrementalIndex;
 import io.druid.segment.incremental.IncrementalIndexSchema;
 import io.druid.timeline.DataSegment;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroValue;
+import org.apache.avro.mapreduce.AvroJob;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -82,6 +84,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -156,6 +161,15 @@ public class IndexGeneratorJob implements Jobby
       if(config.isAvro()){
     	  job.setInputFormatClass(AvroPositionInputFormat.class);
     	  job.setMapperClass(AvroIndexGeneratorMapper.class);
+    	  //Specify Avro schema, can be omitted
+    	  String schemaPath = config.getAvroSchema();
+    	  if(schemaPath != null && !schemaPath.isEmpty()){
+    		  byte[] encoded = Files.readAllBytes(Paths.get(schemaPath));
+              String textSchema = new String(encoded, StandardCharsets.UTF_8);
+              Schema.Parser parser = new Schema.Parser();
+              Schema schema = parser.parse(textSchema);
+              AvroJob.setInputKeySchema(job, schema);
+    	  }
       }else{
     	  if (config.isCombineText()) {
 	        job.setInputFormatClass(CombineTextInputFormat.class);
@@ -164,7 +178,6 @@ public class IndexGeneratorJob implements Jobby
 	      }
     	  job.setMapperClass(IndexGeneratorMapper.class);
       }
-      
 
       job.setMapOutputValueClass(Text.class);
 

@@ -40,8 +40,10 @@ import io.druid.segment.indexing.granularity.UniformGranularitySpec;
 import io.druid.timeline.partition.HashBasedNumberedShardSpec;
 import io.druid.timeline.partition.NoneShardSpec;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroValue;
+import org.apache.avro.mapreduce.AvroJob;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -64,6 +66,9 @@ import org.joda.time.Interval;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -100,6 +105,15 @@ public class DetermineHashedPartitionsJob implements Jobby
       if(config.isAvro()){
     	  groupByJob.setInputFormatClass(AvroPositionInputFormat.class);
     	  groupByJob.setMapperClass(AvroDetermineCardinalityMapper.class);
+    	  //Specify Avro schema, can be omitted
+    	  String schemaPath = config.getAvroSchema();
+    	  if(schemaPath != null && !schemaPath.isEmpty()){
+    		  byte[] encoded = Files.readAllBytes(Paths.get(schemaPath));
+              String textSchema = new String(encoded, StandardCharsets.UTF_8);
+              Schema.Parser parser = new Schema.Parser();
+              Schema schema = parser.parse(textSchema);
+              AvroJob.setInputKeySchema(groupByJob, schema);
+    	  }
       }else{
     	  if (config.isCombineText()) {
 	        groupByJob.setInputFormatClass(CombineTextInputFormat.class);

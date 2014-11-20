@@ -183,6 +183,7 @@ public class HadoopDruidIndexerConfigTest
         null,
         null,
         null,
+        null,
         null
     );
     HadoopDruidIndexerConfig config = HadoopDruidIndexerConfig.fromSchema(spec);
@@ -243,6 +244,7 @@ public class HadoopDruidIndexerConfigTest
         ImmutableMap.of("foo", "bar"),
         false,
         true,
+        null,
         null,
         null,
         null,

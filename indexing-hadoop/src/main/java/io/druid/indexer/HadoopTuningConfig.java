@@ -54,7 +54,8 @@ public class HadoopTuningConfig implements TuningConfig
         false,
         null,
         false,
-        false
+        false,
+        null
     );
   }
 
@@ -70,6 +71,7 @@ public class HadoopTuningConfig implements TuningConfig
   private final Map<String, String> jobProperties;
   private final boolean combineText;
   private final boolean avro;
+  private final String avroSchema;
 
   @JsonCreator
   public HadoopTuningConfig(
@@ -84,7 +86,8 @@ public class HadoopTuningConfig implements TuningConfig
       final @JsonProperty("ignoreInvalidRows") boolean ignoreInvalidRows,
       final @JsonProperty("jobProperties") Map<String, String> jobProperties,
       final @JsonProperty("combineText") boolean combineText,
-      final @JsonProperty("avro") boolean avro
+      final @JsonProperty("avro") boolean avro,
+      final @JsonProperty("avroSchema") String avroSchema
   )
   {
     this.workingPath = workingPath == null ? null : workingPath;
@@ -101,6 +104,7 @@ public class HadoopTuningConfig implements TuningConfig
                           : ImmutableMap.copyOf(jobProperties));
     this.combineText = combineText;
     this.avro = avro;
+    this.avroSchema = avroSchema;
   }
 
   @JsonProperty
@@ -174,6 +178,12 @@ public class HadoopTuningConfig implements TuningConfig
   {
     return avro;
   }
+  
+  @JsonProperty
+  public String getAvroSchema()
+  {
+    return avroSchema;
+  }
 
   public HadoopTuningConfig withWorkingPath(String path)
   {
@@ -189,7 +199,8 @@ public class HadoopTuningConfig implements TuningConfig
         ignoreInvalidRows,
         jobProperties,
         combineText,
-        avro
+        avro,
+        avroSchema
     );
   }
 
@@ -207,7 +218,8 @@ public class HadoopTuningConfig implements TuningConfig
         ignoreInvalidRows,
         jobProperties,
         combineText,
-        avro
+        avro,
+        avroSchema
     );
   }
 
@@ -225,7 +237,8 @@ public class HadoopTuningConfig implements TuningConfig
         ignoreInvalidRows,
         jobProperties,
         combineText,
-        avro
+        avro,
+        avroSchema
     );
   }
 }

@@ -47,8 +47,10 @@ import io.druid.timeline.partition.NoneShardSpec;
 import io.druid.timeline.partition.ShardSpec;
 import io.druid.timeline.partition.SingleDimensionShardSpec;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroValue;
+import org.apache.avro.mapreduce.AvroJob;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -79,6 +81,9 @@ import org.joda.time.Interval;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -138,6 +143,15 @@ public class DeterminePartitionsJob implements Jobby
         if(config.isAvro()){
         	groupByJob.setInputFormatClass(AvroPositionInputFormat.class);
             groupByJob.setMapperClass(AvroDeterminePartitionsGroupByMapper.class);
+	        //Specify Avro schema, can be omitted
+	      	String schemaPath = config.getAvroSchema();
+	      	if(schemaPath != null && !schemaPath.isEmpty()){
+				byte[] encoded = Files.readAllBytes(Paths.get(schemaPath));
+				String textSchema = new String(encoded, StandardCharsets.UTF_8);
+				Schema.Parser parser = new Schema.Parser();
+				Schema schema = parser.parse(textSchema);
+				AvroJob.setInputKeySchema(groupByJob, schema);
+	      	}
         }else{
         	groupByJob.setInputFormatClass(TextInputFormat.class);
             groupByJob.setMapperClass(DeterminePartitionsGroupByMapper.class);

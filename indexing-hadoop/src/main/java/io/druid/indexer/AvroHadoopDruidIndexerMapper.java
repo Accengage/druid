@@ -30,6 +30,7 @@ import org.apache.avro.mapred.AvroValue;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.joda.time.DateTime;
+import org.mortbay.log.Log;
 
 import java.io.IOException;
 
@@ -66,6 +67,7 @@ public abstract class AvroHadoopDruidIndexerMapper<KEYOUT, VALUEOUT> extends Map
       try {
     	GenericRecord grValue = value.datum();
         inputRow = parser.parse(grValue.toString());
+        Log.info("inputRow: " + inputRow.toString());
       }
       catch (Exception e) {
         if (config.isIgnoreInvalidRows()) {

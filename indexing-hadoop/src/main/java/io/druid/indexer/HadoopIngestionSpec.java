@@ -75,6 +75,7 @@ public class HadoopIngestionSpec extends IngestionSpec<HadoopIOConfig, HadoopTun
       final @JsonProperty("jobProperties") Map<String, String> jobProperties,
       final @JsonProperty("combineText") boolean combineText,
       final @JsonProperty("avro") boolean avro,
+      final @JsonProperty("avroSchema") String avroSchema,
       // These fields are deprecated and will be removed in the future
       final @JsonProperty("timestampColumn") String timestampColumn,
       final @JsonProperty("timestampFormat") String timestampFormat,
@@ -167,7 +168,8 @@ public class HadoopIngestionSpec extends IngestionSpec<HadoopIOConfig, HadoopTun
           ignoreInvalidRows,
           jobProperties,
           combineText,
-          avro
+          avro,
+          avroSchema
       );
     }
   }
@@ -223,6 +225,7 @@ public class HadoopIngestionSpec extends IngestionSpec<HadoopIOConfig, HadoopTun
         null,
         null,
         null,
+        null,
         null
     );
   }
@@ -257,6 +260,7 @@ public class HadoopIngestionSpec extends IngestionSpec<HadoopIOConfig, HadoopTun
         null,
         null,
         null,
+        null,
         null
     );
   }
@@ -286,6 +290,7 @@ public class HadoopIngestionSpec extends IngestionSpec<HadoopIOConfig, HadoopTun
         null,
         false,
         false,
+        null,
         null,
         null,
         null,
