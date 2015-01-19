@@ -419,6 +419,7 @@ public class TaskSerdeTest
             false,
             ImmutableMap.of("foo", "bar"),
             false,
+            false, //avro
             null,
             null,
             null,

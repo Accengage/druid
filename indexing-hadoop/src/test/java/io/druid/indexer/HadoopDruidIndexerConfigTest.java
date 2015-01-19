@@ -176,6 +176,7 @@ public class HadoopDruidIndexerConfigTest
         false,
         ImmutableMap.of("foo", "bar"),
         false,
+        false,
         null,
         null,
         null,
@@ -207,4 +208,70 @@ public class HadoopDruidIndexerConfigTest
     }
 
   }
+
+	@Test
+	public void testAvroHashedBucketSelection() {
+	  List<HadoopyShardSpec> specs = Lists.newArrayList();
+	  final int partitionCount = 10;
+	  for (int i = 0; i < partitionCount; i++) {
+	    specs.add(new HadoopyShardSpec(new HashBasedNumberedShardSpec(i, partitionCount, new DefaultObjectMapper()), i));
+	  }
+	  HadoopIngestionSpec spec = new HadoopIngestionSpec(
+	      null, null, null,
+	      "foo",
+	      new TimestampSpec("timestamp", "auto"),
+	      new JSONDataSpec(ImmutableList.of("foo"), null),
+	      new UniformGranularitySpec(
+	          Granularity.HOUR,
+	          QueryGranularity.MINUTE,
+	          ImmutableList.of(new Interval("2010-01-01/P1D")),
+	          Granularity.HOUR
+	      ),
+	      null,
+	      null,
+	      null,
+	      null,
+	      null,
+	      false,
+	      true,
+	      ImmutableMap.of(new DateTime("2010-01-01T01:00:00"), specs),
+	      false,
+	      new DataRollupSpec(ImmutableList.<AggregatorFactory>of(), QueryGranularity.MINUTE),
+	      null,
+	      false,
+	      ImmutableMap.of("foo", "bar"),
+	      false,
+	      true,
+	      null,
+	      null,
+	      null,
+	      null,
+	      null,
+	      null
+	  );
+	  HadoopDruidIndexerConfig config = HadoopDruidIndexerConfig.fromSpec(spec);
+	  final List<String> dims = Arrays.asList("diM1", "dIM2");
+	  final ImmutableMap<String, Object> values = ImmutableMap.<String, Object>of(
+	      "Dim1",
+	      "1",
+	      "DiM2",
+	      "2",
+	      "dim1",
+	      "3",
+	      "dim2",
+	      "4"
+	  );
+	  final long timestamp = new DateTime("2010-01-01T01:00:01").getMillis();
+	  final Bucket expectedBucket = config.getBucket(new MapBasedInputRow(timestamp, dims, values)).get();
+	  final long nextBucketTimestamp = QueryGranularity.MINUTE.next(QueryGranularity.MINUTE.truncate(timestamp));
+	  // check that all rows having same set of dims and truncated timestamp hash to same bucket
+	  for (int i = 0; timestamp + i < nextBucketTimestamp; i++) {
+	    Assert.assertEquals(
+	        expectedBucket.partitionNum,
+	        config.getBucket(new MapBasedInputRow(timestamp + i, dims, values)).get().partitionNum
+	    );
+	  }
+	  
+	}
+
 }
